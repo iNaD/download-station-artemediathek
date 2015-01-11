@@ -1,0 +1,10 @@
+{
+    "name": "artemediathek",
+    "hostprefix": "arte.tv",
+    "displayname": "ARTE+7",
+    "version": "0.1",
+    "authentication": "no",
+    "module": "artemediathek.php",
+    "class": "SynoFileHostingARTEMediathek",
+    "description": "Download Videos from ARTE+7"
+}
