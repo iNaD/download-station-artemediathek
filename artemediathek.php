@@ -2,7 +2,7 @@
 
 /**
  * @author Daniel Gehn <me@theinad.com>
- * @version 0.2b
+ * @version 0.2c
  * @copyright 2015 Daniel Gehn
  * @license http://opensource.org/licenses/MIT Licensed under MIT License
  */
@@ -41,72 +41,71 @@ class SynoFileHostingARTEMediathek extends TheiNaDProvider {
             return false;
         }
 
-        if(preg_match('#arte_vp_url=["|\'](.*?)["|\']#si', $rawXML, $match) === 1)
-        {
-            $RawJSON = $this->curlRequest($match[1]);
+        if(preg_match('#data-embed-base-url=["|\'](.*?)["|\']#si', $rawXML, $match) === 1) {
+            $rawXML = $this->curlRequest($match[1]);
 
-            if($RawJSON === null)
+            if($rawXML === null)
             {
                 return false;
             }
 
-            $data = json_decode($RawJSON);
+            if (preg_match('#arte_vp_url=["|\'](.*?)["|\']#si', $rawXML, $match) === 1) {
+                $RawJSON = $this->curlRequest($match[1]);
 
-            $bestSource = array(
-                'bitrate'   => -1,
-                'url'       => '',
-            );
-
-            foreach($data->videoJsonPlayer->VSR as $source)
-            {
-                if($source->mediaType == "mp4" && mb_strtolower($source->versionShortLibelle) == $this->language && $source->bitrate > $bestSource['bitrate'])
-                {
-                    $bestSource['bitrate'] = $source->bitrate;
-                    $bestSource['url'] = $source->url;
+                if ($RawJSON === null) {
+                    return false;
                 }
+
+                $data = json_decode($RawJSON);
+
+                $bestSource = array(
+                    'bitrate' => -1,
+                    'url' => '',
+                );
+
+                foreach ($data->videoJsonPlayer->VSR as $source) {
+                    if ($source->mediaType == "mp4" && mb_strtolower($source->versionShortLibelle) == $this->language && $source->bitrate > $bestSource['bitrate']) {
+                        $bestSource['bitrate'] = $source->bitrate;
+                        $bestSource['url'] = $source->url;
+                    }
+                }
+
+                if ($bestSource['url'] !== '') {
+                    $filename = '';
+                    $url = trim($bestSource['url']);
+                    $pathinfo = pathinfo($url);
+
+                    $this->DebugLog("Title: " . $data->videoJsonPlayer->VTI . ' Subtitle: ' . $data->videoJsonPlayer->VSU);
+
+                    if (!empty($data->videoJsonPlayer->VTI)) {
+                        $filename .= $data->videoJsonPlayer->VTI;
+                    }
+
+                    if (!empty($data->videoJsonPlayer->VSU)) {
+                        $filename .= ' - ' . $data->videoJsonPlayer->VSU;
+                    }
+
+
+                    if (empty($filename)) {
+                        $filename = $pathinfo['basename'];
+                    } else {
+                        $filename .= '.' . $pathinfo['extension'];
+                    }
+
+                    $this->DebugLog("Naming file: " . $filename);
+
+                    $DownloadInfo = array();
+                    $DownloadInfo[DOWNLOAD_URL] = $url;
+                    $DownloadInfo[DOWNLOAD_FILENAME] = $this->safeFilename($filename);
+
+                    return $DownloadInfo;
+                }
+
+                $this->DebugLog("Failed to determine best quality: " . json_encode($data->videoJsonPlayer->VSR));
+
+                return FALSE;
+
             }
-
-            if($bestSource['url'] !== '')
-            {
-                $filename = '';
-                $url = trim($bestSource['url']);
-                $pathinfo = pathinfo($url);
-
-                $this->DebugLog("Title: " . $data->videoJsonPlayer->VTI . ' Subtitle: ' . $data->videoJsonPlayer->VSU);
-
-                if(!empty($data->videoJsonPlayer->VTI))
-                {
-                    $filename .= $data->videoJsonPlayer->VTI;
-                }
-
-                if(!empty($data->videoJsonPlayer->VSU))
-                {
-                    $filename .= ' - ' . $data->videoJsonPlayer->VSU;
-                }
-
-
-                if(empty($filename))
-                {
-                    $filename = $pathinfo['basename'];
-                }
-                else
-                {
-                    $filename .= '.' . $pathinfo['extension'];
-                }
-
-                $this->DebugLog("Naming file: " . $filename);
-
-                $DownloadInfo = array();
-                $DownloadInfo[DOWNLOAD_URL] = $url;
-                $DownloadInfo[DOWNLOAD_FILENAME] = $this->safeFilename($filename);
-
-                return $DownloadInfo;
-            }
-
-            $this->DebugLog("Failed to determine best quality: " . json_encode($data->videoJsonPlayer->VSR));
-
-            return FALSE;
-
         }
 
         $this->DebugLog("Couldn't identify player meta");
