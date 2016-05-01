@@ -2,7 +2,7 @@
 
 /**
  * @author Daniel Gehn <me@theinad.com>
- * @version 0.2c
+ * @version 0.3a
  * @copyright 2015 Daniel Gehn
  * @license http://opensource.org/licenses/MIT Licensed under MIT License
  */
@@ -14,10 +14,16 @@ class SynoFileHostingARTEMediathek extends TheiNaDProvider {
     protected $LogPath = '/tmp/arte-mediathek.log';
 
     protected $language = "de";
+    protected $languageShortLibelle = "de";
 
     protected static $languageMap = array(
         'de'    => 'de',
-        'fr'    => 'vof',
+        'fr'    => 'fr',
+    );
+
+    protected static $languageMapShortLibelle = array(
+        'de'    => 'de',
+        'fr'    => 'vf',
     );
 
     public function GetDownloadInfo() {
@@ -28,6 +34,7 @@ class SynoFileHostingARTEMediathek extends TheiNaDProvider {
         if(isset($match[1]) && isset(self::$languageMap[$match[1]]))
         {
             $this->language = self::$languageMap[$match[1]];
+            $this->languageShortLibelle = self::$languageMapShortLibelle[$match[1]];
         }
 
         $this->DebugLog('Using language ' . $this->language);
@@ -49,62 +56,76 @@ class SynoFileHostingARTEMediathek extends TheiNaDProvider {
                 return false;
             }
 
+            $vpUrl = null;
+
             if (preg_match('#arte_vp_url=["|\'](.*?)["|\']#si', $rawXML, $match) === 1) {
-                $RawJSON = $this->curlRequest($match[1]);
+                $vpUrl = $match[1];
+            } else if(preg_match('#arte_vp_url_oembed=["|\'](.*?)["|\']#si', $rawXML, $match) === 1) {
+                $vpUrl = $match[1];
+            }
 
-                if ($RawJSON === null) {
-                    return false;
+            if ($vpUrl != null) {
+                if(preg_match('#https:\/\/api\.arte\.tv\/api\/player\/v1\/oembed\/[a-z]{2}\/([A-Za-z0-9-]+)(\?platform=.+)#si', $vpUrl, $match) === 1) {
+                    $id = $match[1];
+                    $fp = $match[2];
+
+                    $apiUrl = "https://api.arte.tv/api/player/v1/config/" . $this->language . "/" . $id . $fp;
+
+                    $RawJSON = $this->curlRequest($apiUrl);
+
+                    if ($RawJSON === null) {
+                        return false;
+                    }
+
+                    $data = json_decode($RawJSON);
+
+                    $bestSource = array(
+                        'bitrate' => -1,
+                        'url' => '',
+                    );
+
+                    foreach ($data->videoJsonPlayer->VSR as $source) {
+                        if ($source->mediaType == "mp4" && mb_strtolower($source->versionShortLibelle) == $this->languageShortLibelle && $source->bitrate > $bestSource['bitrate']) {
+                            $bestSource['bitrate'] = $source->bitrate;
+                            $bestSource['url'] = $source->url;
+                        }
+                    }
+
+                    if ($bestSource['url'] !== '') {
+                        $filename = '';
+                        $url = trim($bestSource['url']);
+                        $pathinfo = pathinfo($url);
+
+                        $this->DebugLog("Title: " . $data->videoJsonPlayer->VTI . (isset($data->videoJsonPlayer->VSU) ? ' Subtitle: ' . $data->videoJsonPlayer->VSU : ''));
+
+                        if (!empty($data->videoJsonPlayer->VTI)) {
+                            $filename .= $data->videoJsonPlayer->VTI;
+                        }
+
+                        if (isset($data->videoJsonPlayer->VSU) && !empty($data->videoJsonPlayer->VSU)) {
+                            $filename .= ' - ' . $data->videoJsonPlayer->VSU;
+                        }
+
+
+                        if (empty($filename)) {
+                            $filename = $pathinfo['basename'];
+                        } else {
+                            $filename .= '.' . $pathinfo['extension'];
+                        }
+
+                        $this->DebugLog("Naming file: " . $filename);
+
+                        $DownloadInfo = array();
+                        $DownloadInfo[DOWNLOAD_URL] = $url;
+                        $DownloadInfo[DOWNLOAD_FILENAME] = $this->safeFilename($filename);
+
+                        return $DownloadInfo;
+                    }
+
+                    $this->DebugLog("Failed to determine best quality: " . json_encode($data->videoJsonPlayer->VSR));
+
+                    return FALSE;
                 }
-
-                $data = json_decode($RawJSON);
-
-                $bestSource = array(
-                    'bitrate' => -1,
-                    'url' => '',
-                );
-
-                foreach ($data->videoJsonPlayer->VSR as $source) {
-                    if ($source->mediaType == "mp4" && mb_strtolower($source->versionShortLibelle) == $this->language && $source->bitrate > $bestSource['bitrate']) {
-                        $bestSource['bitrate'] = $source->bitrate;
-                        $bestSource['url'] = $source->url;
-                    }
-                }
-
-                if ($bestSource['url'] !== '') {
-                    $filename = '';
-                    $url = trim($bestSource['url']);
-                    $pathinfo = pathinfo($url);
-
-                    $this->DebugLog("Title: " . $data->videoJsonPlayer->VTI . ' Subtitle: ' . $data->videoJsonPlayer->VSU);
-
-                    if (!empty($data->videoJsonPlayer->VTI)) {
-                        $filename .= $data->videoJsonPlayer->VTI;
-                    }
-
-                    if (!empty($data->videoJsonPlayer->VSU)) {
-                        $filename .= ' - ' . $data->videoJsonPlayer->VSU;
-                    }
-
-
-                    if (empty($filename)) {
-                        $filename = $pathinfo['basename'];
-                    } else {
-                        $filename .= '.' . $pathinfo['extension'];
-                    }
-
-                    $this->DebugLog("Naming file: " . $filename);
-
-                    $DownloadInfo = array();
-                    $DownloadInfo[DOWNLOAD_URL] = $url;
-                    $DownloadInfo[DOWNLOAD_FILENAME] = $this->safeFilename($filename);
-
-                    return $DownloadInfo;
-                }
-
-                $this->DebugLog("Failed to determine best quality: " . json_encode($data->videoJsonPlayer->VSR));
-
-                return FALSE;
-
             }
         }
 

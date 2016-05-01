@@ -2,7 +2,7 @@
     "name": "artemediathek",
     "hostprefix": "arte.tv",
     "displayname": "ARTE+7",
-    "version": "0.2c",
+    "version": "0.3a",
     "authentication": "no",
     "module": "artemediathek.php",
     "class": "SynoFileHostingARTEMediathek",
