@@ -1,5 +1,8 @@
 # Synology Download Station Hoster Plugin for ARTE+7
 
+## Dieses Projekt wird nicht mehr weitergeführt, schaue stattdessen hier vorbei: https://github.com/iNaD/ds-mediatheken
+## This Project is discontinued, you will find an improved version following the link: https://github.com/iNaD/ds-mediatheken
+
 **Notice** You will find the english translation on the bottom of this document.
 
 ## Installation
